@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj": {}
+  },
+  "projects": {
+    "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
+        "projectName": "CrudApp",
+        "projectPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
+        "packagesPath": "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/06c79631ca0138d1a5205a25b5210d81/nuget",
+        "outputPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/raphaelmorsch/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net5.0"
+        ],
+        "sources": {
+          "/opt/homebrew/Cellar/dotnet/10.0.107/libexec/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net5.0": {
+            "targetAlias": "net5.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
+      },
+      "frameworks": {
+        "net5.0": {
+          "targetAlias": "net5.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[5.0.0, 5.0.0]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.osx-x64",
+              "version": "[5.0.17, 5.0.17]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[5.0.0, 5.0.0]"
+            }
+          ],
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/opt/homebrew/Cellar/dotnet/10.0.107/libexec/sdk/10.0.107/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

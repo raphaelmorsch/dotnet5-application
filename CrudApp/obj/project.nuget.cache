@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "68BgCP2gCbM=",
+  "success": true,
+  "projectFilePath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
+  "expectedPackageFiles": [
+    "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/06c79631ca0138d1a5205a25b5210d81/nuget/microsoft.netcore.app.ref/5.0.0/microsoft.netcore.app.ref.5.0.0.nupkg.sha512",
+    "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/06c79631ca0138d1a5205a25b5210d81/nuget/microsoft.aspnetcore.app.ref/5.0.0/microsoft.aspnetcore.app.ref.5.0.0.nupkg.sha512",
+    "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/06c79631ca0138d1a5205a25b5210d81/nuget/microsoft.netcore.app.host.osx-x64/5.0.17/microsoft.netcore.app.host.osx-x64.5.0.17.nupkg.sha512"
+  ],
+  "logs": []
+}

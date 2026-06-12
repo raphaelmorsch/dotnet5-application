@@ -1,0 +1,8 @@
+{
+  "runtimeOptions": {
+    "additionalProbingPaths": [
+      "/Users/raphaelmorsch/.dotnet/store/|arch|/|tfm|",
+      "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/06c79631ca0138d1a5205a25b5210d81/nuget"
+    ]
+  }
+}
