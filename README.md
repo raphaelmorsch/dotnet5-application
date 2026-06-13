@@ -55,11 +55,89 @@ A aplicação expõe dois endpoints para probes:
 Exemplo de configuração no Deployment está em `openshift/deployment.yaml`. Para aplicar as probes em um Deployment existente:
 
 ```bash
-oc set probe deployment/crudapp --liveness --get-url=http://:8080/health/live --initial-delay-seconds=15
-oc set probe deployment/crudapp --readiness --get-url=http://:8080/health/ready --initial-delay-seconds=5
+oc set probe deployment/crudapp -n dotnet-builders --liveness --get-url=http://:8080/health/live --initial-delay-seconds=15
+oc set probe deployment/crudapp -n dotnet-builders --readiness --get-url=http://:8080/health/ready --initial-delay-seconds=5
 ```
 
 No container S2I .NET, a aplicação escuta na porta **8080**.
+
+Namespace usado nos exemplos: **`dotnet-builders`**. Ajuste o nome do Deployment se for diferente (ex.: `dotnet-1`):
+
+```bash
+oc get deployment -n dotnet-builders
+```
+
+## HPA (autoscaling por memória)
+
+Escala quando o uso médio de memória dos pods ultrapassa **65%** do `memory request` (128Mi em `openshift/deployment.yaml`).
+
+Aplicar:
+
+```bash
+oc apply -f openshift/deployment.yaml -n dotnet-builders
+oc apply -f openshift/hpa.yaml -n dotnet-builders
+```
+
+Verificar:
+
+```bash
+oc get hpa -n dotnet-builders
+oc describe hpa crudapp -n dotnet-builders
+oc adm top pods -n dotnet-builders
+```
+
+## Teste de stress do HPA
+
+### 1. Confirmar métricas
+
+```bash
+NS=dotnet-builders
+
+oc get hpa -n "$NS"
+oc adm top pods -n "$NS"
+oc describe hpa crudapp -n "$NS"
+```
+
+O HPA deve exibir `TARGETS` com percentual (ex.: `45%/65%`). Se aparecer `<unknown>`, as métricas ainda não estão disponíveis.
+
+### 2. Monitorar em tempo real
+
+```bash
+watch -n 5 'echo "=== HPA ==="; oc get hpa -n dotnet-builders; echo; echo "=== PODS ==="; oc get pods -n dotnet-builders; echo; echo "=== MEMÓRIA ==="; oc adm top pods -n dotnet-builders'
+```
+
+O HPA sobe **+1 pod por minuto** após passar de 65% — aguarde **2–5 minutos** após a memória subir.
+
+### 3. Gerar carga (produtos em memória)
+
+```bash
+ROUTE="https://SUA-ROUTE-AQUI"
+
+for i in $(seq 1 3000); do
+  curl -s -X POST "$ROUTE/api/products" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"$(head -c 20000 /dev/zero | tr '\0' 'x')\",\"price\":1,\"quantity\":1}" &
+  if (( i % 100 == 0 )); then echo "Criados: $i"; fi
+done
+wait
+```
+
+### 4. Validar escala
+
+```bash
+oc adm top pods -n dotnet-builders
+oc get hpa -n dotnet-builders
+oc get pods -n dotnet-builders
+oc describe hpa crudapp -n dotnet-builders | tail -20
+```
+
+**65% de 128Mi ≈ 83Mi** — acima disso, o HPA deve aumentar as réplicas.
+
+### 5. Limpeza
+
+```bash
+oc delete pod -l app=crudapp -n dotnet-builders
+```
 
 ## Exemplos com curl
 
