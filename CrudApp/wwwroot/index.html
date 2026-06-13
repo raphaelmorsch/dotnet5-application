@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrudApp — Produtos</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header__brand">
+        <span class="header__logo">C</span>
+        <div>
+          <h1>CrudApp</h1>
+          <p>Gerenciamento de produtos</p>
+        </div>
+      </div>
+      <button type="button" id="btn-new" class="btn btn--primary">+ Novo produto</button>
+    </header>
+
+    <main class="main">
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Produtos</h2>
+          <button type="button" id="btn-refresh" class="btn btn--ghost">Atualizar</button>
+        </div>
+
+        <div id="alert" class="alert" hidden></div>
+
+        <div id="loading" class="loading" hidden>
+          <span class="spinner"></span>
+          Carregando produtos...
+        </div>
+
+        <div id="empty-state" class="empty-state" hidden>
+          <p>Nenhum produto cadastrado.</p>
+          <button type="button" id="btn-empty-new" class="btn btn--primary">Cadastrar primeiro produto</button>
+        </div>
+
+        <div class="table-wrap" id="table-wrap" hidden>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Preço</th>
+                <th>Quantidade</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="products-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="product-dialog" class="dialog">
+    <form id="product-form" class="dialog__form">
+      <div class="dialog__header">
+        <h2 id="dialog-title">Novo produto</h2>
+        <button type="button" id="btn-close-dialog" class="btn btn--icon" aria-label="Fechar">&times;</button>
+      </div>
+
+      <input type="hidden" id="product-id">
+
+      <label class="field">
+        <span>Nome</span>
+        <input type="text" id="product-name" required maxlength="100" placeholder="Ex: Notebook">
+      </label>
+
+      <label class="field">
+        <span>Preço (R$)</span>
+        <input type="number" id="product-price" required min="0" step="0.01" placeholder="0,00">
+      </label>
+
+      <label class="field">
+        <span>Quantidade</span>
+        <input type="number" id="product-quantity" required min="0" step="1" placeholder="0">
+      </label>
+
+      <div class="dialog__actions">
+        <button type="button" id="btn-cancel" class="btn btn--ghost">Cancelar</button>
+        <button type="submit" id="btn-save" class="btn btn--primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" class="dialog dialog--small">
+    <div class="dialog__header">
+      <h2>Excluir produto</h2>
+      <button type="button" id="btn-close-delete" class="btn btn--icon" aria-label="Fechar">&times;</button>
+    </div>
+    <p id="delete-message">Tem certeza que deseja excluir este produto?</p>
+    <div class="dialog__actions">
+      <button type="button" id="btn-cancel-delete" class="btn btn--ghost">Cancelar</button>
+      <button type="button" id="btn-confirm-delete" class="btn btn--danger">Excluir</button>
+    </div>
+  </dialog>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -15,6 +15,24 @@ dotnet run
 
 A API fica disponível em `http://localhost:5000`.
 
+## Frontend
+
+A interface web é servida pela própria aplicação. Após subir o projeto, acesse:
+
+```
+http://localhost:5000
+```
+
+No OpenShift, acesse a URL da Route (porta 8080). O frontend consome a API na mesma origem — sem necessidade de CORS.
+
+Funcionalidades da UI:
+
+- Listar produtos
+- Criar novo produto
+- Editar produto existente
+- Excluir com confirmação
+- Atualizar lista manualmente
+
 ## Endpoints
 
 | Método | Rota | Descrição |
