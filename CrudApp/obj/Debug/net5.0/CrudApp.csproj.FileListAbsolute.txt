@@ -24,3 +24,4 @@
 /Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/Debug/net5.0/CrudApp.pdb
 /Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/Debug/net5.0/CrudApp.genruntimeconfig.cache
 /Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/Debug/net5.0/ref/CrudApp.dll
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/Debug/net5.0/CrudApp.sourcelink.json

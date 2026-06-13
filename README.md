@@ -24,6 +24,24 @@ A API fica disponível em `http://localhost:5000`.
 | POST | `/api/products` | Cria um produto |
 | PUT | `/api/products/{id}` | Atualiza um produto |
 | DELETE | `/api/products/{id}` | Remove um produto |
+| GET | `/health/live` | Liveness probe (OpenShift/Kubernetes) |
+| GET | `/health/ready` | Readiness probe (OpenShift/Kubernetes) |
+
+## Health checks (OpenShift)
+
+A aplicação expõe dois endpoints para probes:
+
+- **`/health/live`** — indica que o processo está vivo (LivenessProbe)
+- **`/health/ready`** — indica que a aplicação está pronta para receber tráfego (ReadinessProbe)
+
+Exemplo de configuração no Deployment está em `openshift/deployment.yaml`. Para aplicar as probes em um Deployment existente:
+
+```bash
+oc set probe deployment/crudapp --liveness --get-url=http://:8080/health/live --initial-delay-seconds=15
+oc set probe deployment/crudapp --readiness --get-url=http://:8080/health/ready --initial-delay-seconds=5
+```
+
+No container S2I .NET, a aplicação escuta na porta **8080**.
 
 ## Exemplos com curl
 
