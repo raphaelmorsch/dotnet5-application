@@ -44,6 +44,52 @@ Funcionalidades da UI:
 | DELETE | `/api/products/{id}` | Remove um produto |
 | GET | `/health/live` | Liveness probe (OpenShift/Kubernetes) |
 | GET | `/health/ready` | Readiness probe (OpenShift/Kubernetes) |
+| GET | `/api/stress/status` | Status do stress (se habilitado) |
+| POST | `/api/stress/memory` | Aloca memória para teste de HPA |
+| DELETE | `/api/stress/memory` | Libera memória alocada |
+
+## CrudApp.StressTest (subaplicação)
+
+Console app na solução que dispara carga contra a API principal.
+
+**Modos:**
+
+| Modo | Descrição |
+|------|-----------|
+| `memory` | Chama `POST /api/stress/memory` (ideal para HPA) |
+| `api` | Cria produtos em paralelo via `POST /api/products` |
+| `all` | Executa os dois modos em sequência |
+
+**Local:**
+
+```bash
+# Terminal 1 — API
+cd CrudApp && dotnet run
+
+# Terminal 2 — stress de memória (480MB / 5 min)
+dotnet run --project CrudApp.StressTest -- -m memory --mb 480 -d 300
+
+# Stress de API (2000 POSTs, 50 concurrent)
+dotnet run --project CrudApp.StressTest -- -m api -r 2000 -c 50
+```
+
+**OpenShift** — habilite stress na app e aponte para a Route:
+
+```bash
+oc set env deployment/dotnet5-crud StressTest__Enabled=true -n dotnet-builders
+
+dotnet run --project CrudApp.StressTest -- \
+  -t https://SUA-ROUTE \
+  -m memory --mb 480 -d 300
+```
+
+Ou use o script:
+
+```bash
+ROUTE=https://SUA-ROUTE ./CrudApp/stress-example.sh
+```
+
+**Segurança:** endpoints `/api/stress/*` retornam `404` quando `StressTest:Enabled=false` (padrão em produção).
 
 ## Health checks (OpenShift)
 
@@ -108,18 +154,24 @@ watch -n 5 'echo "=== HPA ==="; oc get hpa -n dotnet-builders; echo; echo "=== P
 
 O HPA sobe **+1 pod por minuto** após passar de 65% — aguarde **2–5 minutos** após a memória subir.
 
-### 3. Gerar carga (produtos em memória)
+### 3. Gerar carga com a subaplicação (recomendado)
 
 ```bash
-ROUTE="https://SUA-ROUTE-AQUI"
+# Memória — dispara HPA de forma previsível
+dotnet run --project CrudApp.StressTest -- \
+  -t https://SUA-ROUTE-AQUI \
+  -m memory --mb 480 -d 300
 
-for i in $(seq 1 3000); do
-  curl -s -X POST "$ROUTE/api/products" \
-    -H "Content-Type: application/json" \
-    -d "{\"name\":\"$(head -c 20000 /dev/zero | tr '\0' 'x')\",\"price\":1,\"quantity\":1}" &
-  if (( i % 100 == 0 )); then echo "Criados: $i"; fi
-done
-wait
+# Ou via curl (com StressTest__Enabled=true no pod)
+curl -X POST https://SUA-ROUTE-AQUI/api/stress/memory \
+  -H "Content-Type: application/json" \
+  -d '{"megabytes":480,"durationSeconds":300}'
+```
+
+Alternativa — carga via CRUD (menos previsível para memória):
+
+```bash
+dotnet run --project CrudApp.StressTest -- -t https://SUA-ROUTE-AQUI -m api -r 3000 -c 50
 ```
 
 ### 4. Validar escala

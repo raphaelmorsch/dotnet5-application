@@ -1,4 +1,5 @@
 using CrudApp.Data;
+using CrudApp.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +15,7 @@ namespace CrudApp
         {
             services.AddControllers();
             services.AddSingleton<IProductRepository, InMemoryProductRepository>();
+            services.AddSingleton<MemoryStressService>();
             services.AddHealthChecks()
                 .AddCheck("self", () => HealthCheckResult.Healthy(), new[] { "live", "ready" });
         }
