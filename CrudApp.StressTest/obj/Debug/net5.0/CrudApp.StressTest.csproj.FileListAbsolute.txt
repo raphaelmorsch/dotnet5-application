@@ -1,0 +1,16 @@
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest.deps.json
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest.runtimeconfig.json
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest.runtimeconfig.dev.json
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest.dll
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/bin/Debug/net5.0/CrudApp.StressTest.pdb
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.GeneratedMSBuildEditorConfig.editorconfig
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.AssemblyInfoInputs.cache
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.AssemblyInfo.cs
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.csproj.CoreCompileInputs.cache
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.sourcelink.json
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.dll
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/refint/CrudApp.StressTest.dll
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.pdb
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/CrudApp.StressTest.genruntimeconfig.cache
+/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/Debug/net5.0/ref/CrudApp.StressTest.dll

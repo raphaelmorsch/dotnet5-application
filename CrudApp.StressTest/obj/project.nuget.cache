@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "1sV2dc7+0jU=",
+  "dgSpecHash": "KT/WyxKcSH8=",
   "success": true,
-  "projectFilePath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
+  "projectFilePath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/CrudApp.StressTest.csproj",
   "expectedPackageFiles": [
     "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/baf8b70162cefd5d4be2d27827a0a1fa/nuget/microsoft.netcore.app.ref/5.0.0/microsoft.netcore.app.ref.5.0.0.nupkg.sha512",
     "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/baf8b70162cefd5d4be2d27827a0a1fa/nuget/microsoft.aspnetcore.app.ref/5.0.0/microsoft.aspnetcore.app.ref.5.0.0.nupkg.sha512",
