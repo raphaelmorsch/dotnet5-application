@@ -36,6 +36,6 @@ jobs:
 
       - name: Show generated image
         run: |
-          oc get istag dotnet5-application:latest \
+          oc get istag dotnet5-app:latest \
             -n "${{ secrets.OPENSHIFT_NAMESPACE }}" \
             -o jsonpath='{.image.dockerImageReference}{"\n"}'
