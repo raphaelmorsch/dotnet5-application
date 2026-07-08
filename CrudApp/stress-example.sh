@@ -1,33 +1,48 @@
 #!/usr/bin/env bash
-# Dispara stress de memória via API (requer StressTest__Enabled=true no pod).
+# Stress test via curl — não precisa de dotnet local.
 #
-# Uso local:
-#   ./stress-example.sh
+# OpenShift (mercantil-dev):
+#   ./CrudApp/stress-example.sh
 #
-# OpenShift:
-#   ROUTE=https://sua-route.apps.cluster.com ./stress-example.sh
+# Parâmetros:
+#   NS=mercantil-dev MB=120 DURATION=600 ./CrudApp/stress-example.sh
+#   ROUTE=https://minha-route.apps.cluster.com MB=120 ./CrudApp/stress-example.sh
 
 set -euo pipefail
 
-NS=dotnet-builders
-TARGET="${ROUTE:-http://localhost:5000}"
-TARGET="${TARGET%/}"
+NS="${NS:-mercantil-dev}"
+MB="${MB:-120}"
+DURATION="${DURATION:-600}"
+ROUTE_LABEL="${ROUTE_LABEL:-app.kubernetes.io/instance=dotnet5-application-dev}"
 
-echo "Target: $TARGET"
+if [[ -z "${ROUTE:-}" ]]; then
+  HOST=$(oc get route -n "$NS" -l "$ROUTE_LABEL" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+  if [[ -z "$HOST" ]]; then
+    echo "Erro: não foi possível obter a Route. Defina ROUTE=https://..."
+    exit 1
+  fi
+  ROUTE="https://${HOST}"
+fi
+
+TARGET="${ROUTE%/}"
+
+echo "Target:   $TARGET"
+echo "Memória:  ${MB}MB por ${DURATION}s"
+echo ""
+
 echo "=== Status antes ==="
-curl -s "$TARGET/api/stress/status" || echo "(stress desabilitado ou indisponível)"
+curl -sk "$TARGET/api/stress/status" || echo "(stress desabilitado — habilite com: oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n $NS)"
 echo ""
 
-echo "=== Iniciando stress de memória (480MB / 300s) ==="
-curl -s -X POST "$TARGET/api/stress/memory" \
+echo "=== Iniciando stress de memória ==="
+curl -sk -X POST "$TARGET/api/stress/memory" \
   -H "Content-Type: application/json" \
-  -d '{"megabytes":480,"durationSeconds":300}'
+  -d "{\"megabytes\":${MB},\"durationSeconds\":${DURATION}}"
 echo ""
 
 echo ""
-echo "Monitorar:"
-echo "  oc get hpa -n $NS"
-echo "  oc adm top pods -n $NS"
+echo "Monitorar HPA:"
+echo "  watch -n 5 'oc get hpa my-dotnet5-crud -n $NS; oc adm top pods -n $NS'"
 echo ""
 echo "Parar manualmente:"
-echo "  curl -X DELETE $TARGET/api/stress/memory"
+echo "  curl -sk -X DELETE $TARGET/api/stress/memory"

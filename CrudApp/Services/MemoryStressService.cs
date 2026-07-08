@@ -29,7 +29,14 @@ namespace CrudApp.Services
                 _buffers.Clear();
                 AllocatedMegabytes = 0;
 
-                _buffers.Add(new byte[megabytes * 1024 * 1024]);
+                var buffer = new byte[megabytes * 1024 * 1024];
+                // Toca cada página (4KB) para forçar commit na RAM — visível no oc adm top / HPA.
+                for (var i = 0; i < buffer.Length; i += 4096)
+                {
+                    buffer[i] = 1;
+                }
+
+                _buffers.Add(buffer);
                 AllocatedMegabytes = megabytes;
 
                 _releaseCts = new CancellationTokenSource();

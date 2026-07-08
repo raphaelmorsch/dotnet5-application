@@ -10,7 +10,7 @@
         "projectUniqueName": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/CrudApp.StressTest.csproj",
         "projectName": "CrudApp.StressTest",
         "projectPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/CrudApp.StressTest.csproj",
-        "packagesPath": "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/baf8b70162cefd5d4be2d27827a0a1fa/nuget",
+        "packagesPath": "/Users/raphaelmorsch/.nuget/packages/",
         "outputPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp.StressTest/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
