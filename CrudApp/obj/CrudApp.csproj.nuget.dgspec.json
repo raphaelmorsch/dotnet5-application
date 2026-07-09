@@ -10,7 +10,7 @@
         "projectUniqueName": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
         "projectName": "CrudApp",
         "projectPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/CrudApp.csproj",
-        "packagesPath": "/Users/raphaelmorsch/.nuget/packages/",
+        "packagesPath": "/var/folders/rj/2fqq2tx13bq2y6zbcb450y8c0000gn/T/cursor-sandbox-cache/85af8ac647d3102648791208c4eb94f2/nuget",
         "outputPath": "/Users/raphaelmorsch/git/dotnet5-application/CrudApp/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
