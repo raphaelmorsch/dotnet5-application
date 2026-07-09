@@ -1,0 +1,19 @@
+# Use este ignoreDifferences na Application do ArgoCD quando o Deployment
+# tiver HPA. Sem isso, o ArgoCD fica OutOfSync sempre que o HPA escalar.
+#
+# Exemplo (Application CR no repo GitOps):
+#
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: dotnet5-application-dev
+# spec:
+#   ignoreDifferences:
+#     - group: apps
+#       kind: Deployment
+#       jsonPointers:
+#         - /spec/replicas
+#   ...
+#
+# Alternativa: remova "replicas:" do Deployment no Git e deixe só o HPA
+# gerenciar (minReplicas define o piso).
