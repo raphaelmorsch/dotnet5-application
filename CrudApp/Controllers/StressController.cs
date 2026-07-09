@@ -11,15 +11,18 @@ namespace CrudApp.Controllers
     {
         private readonly MemoryStressService _memoryStress;
         private readonly LivenessDegradeService _livenessDegrade;
+        private readonly ReadinessDegradeService _readinessDegrade;
         private readonly IConfiguration _configuration;
 
         public StressController(
             MemoryStressService memoryStress,
             LivenessDegradeService livenessDegrade,
+            ReadinessDegradeService readinessDegrade,
             IConfiguration configuration)
         {
             _memoryStress = memoryStress;
             _livenessDegrade = livenessDegrade;
+            _readinessDegrade = readinessDegrade;
             _configuration = configuration;
         }
 
@@ -36,7 +39,8 @@ namespace CrudApp.Controllers
                 enabled = true,
                 memoryActive = _memoryStress.IsActive,
                 allocatedMegabytes = _memoryStress.AllocatedMegabytes,
-                livenessDegraded = _livenessDegrade.IsDegraded
+                livenessDegraded = _livenessDegrade.IsDegraded,
+                readinessDegraded = _readinessDegrade.IsDegraded
             });
         }
 
@@ -112,6 +116,38 @@ namespace CrudApp.Controllers
             _livenessDegrade.Restore();
 
             return Ok(new { message = "Liveness probe restored." });
+        }
+
+        [HttpPost("readiness/degrade")]
+        [HttpGet("readiness/degrade")]
+        public IActionResult DegradeReadiness()
+        {
+            if (!IsStressEnabled())
+            {
+                return NotFound();
+            }
+
+            _readinessDegrade.Degrade();
+
+            return Accepted(new
+            {
+                message = "Readiness probe will fail until restored.",
+                healthEndpoint = "/health/ready",
+                restore = "DELETE /api/stress/readiness/degrade"
+            });
+        }
+
+        [HttpDelete("readiness/degrade")]
+        public IActionResult RestoreReadiness()
+        {
+            if (!IsStressEnabled())
+            {
+                return NotFound();
+            }
+
+            _readinessDegrade.Restore();
+
+            return Ok(new { message = "Readiness probe restored." });
         }
 
         private bool IsStressEnabled()

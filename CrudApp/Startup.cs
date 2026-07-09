@@ -17,8 +17,9 @@ namespace CrudApp
             services.AddSingleton<IProductRepository, InMemoryProductRepository>();
             services.AddSingleton<MemoryStressService>();
             services.AddSingleton<LivenessDegradeService>();
+            services.AddSingleton<ReadinessDegradeService>();
             services.AddHealthChecks()
-                .AddCheck("self", () => HealthCheckResult.Healthy(), new[] { "ready" })
+                .AddCheck<ReadinessHealthCheck>("readiness", tags: new[] { "ready" })
                 .AddCheck<LivenessHealthCheck>("liveness", tags: new[] { "live" });
         }
 

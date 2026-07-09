@@ -49,6 +49,8 @@ Funcionalidades da UI:
 | DELETE | `/api/stress/memory` | Libera memória alocada |
 | GET/POST | `/api/stress/liveness/degrade` | Simula falha na liveness (teste) |
 | DELETE | `/api/stress/liveness/degrade` | Restaura liveness após teste |
+| GET/POST | `/api/stress/readiness/degrade` | Simula falha na readiness (teste) |
+| DELETE | `/api/stress/readiness/degrade` | Restaura readiness após teste |
 
 ## Teste da Liveness Probe
 
@@ -85,6 +87,45 @@ curl -sk https://SUA-ROUTE/health/live          # HTTP 503
 
 # Ver restart (~30-40s)
 watch -n 5 'oc get pods -n mercantil-dev | grep my-dotnet5-crud'
+```
+
+## Teste da Readiness Probe
+
+O endpoint `/health/ready` pode ser degradado via API (requer `StressTest:Enabled=true`).
+
+**Readiness probe no Deployment:**
+
+```yaml
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+```
+
+Diferente da liveness: falha na readiness **não reinicia** o pod — ele sai do Service (sem receber tráfego).
+
+**Passos no OpenShift:**
+
+```bash
+oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n mercantil-dev
+
+# Saudável
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"    # 200
+
+# Degradar
+curl -sk "$ROUTE/api/stress/readiness/degrade"
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"     # 503
+
+# Pod continua Running, mas Not Ready
+watch -n 5 'oc get pods -n mercantil-dev | grep my-dotnet5-crud'
+
+# Restaurar (pod volta a receber tráfego)
+curl -sk -X DELETE "$ROUTE/api/stress/readiness/degrade"
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"     # 200
 ```
 
 ## CrudApp.StressTest (subaplicação)
