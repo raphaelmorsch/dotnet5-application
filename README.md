@@ -47,7 +47,7 @@ Funcionalidades da UI:
 | GET | `/api/stress/status` | Status do stress (se habilitado) |
 | POST | `/api/stress/memory` | Aloca memória para teste de HPA |
 | DELETE | `/api/stress/memory` | Libera memória alocada |
-| POST | `/api/stress/liveness/degrade` | Simula falha na liveness (teste) |
+| GET/POST | `/api/stress/liveness/degrade` | Simula falha na liveness (teste) |
 | DELETE | `/api/stress/liveness/degrade` | Restaura liveness após teste |
 
 ## Teste da Liveness Probe
@@ -78,7 +78,9 @@ oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n mercantil-dev
 curl -sk https://SUA-ROUTE/health/live          # HTTP 200
 
 # Degradar
-curl -sk -X POST https://SUA-ROUTE/api/stress/liveness/degrade
+# Degradar (GET funciona sem body; POST requer -d '')
+curl -sk "$ROUTE/api/stress/liveness/degrade"
+# ou: curl -sk -X POST "$ROUTE/api/stress/liveness/degrade" -d ''
 curl -sk https://SUA-ROUTE/health/live          # HTTP 503
 
 # Ver restart (~30-40s)

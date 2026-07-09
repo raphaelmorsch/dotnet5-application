@@ -83,6 +83,7 @@ namespace CrudApp.Controllers
         }
 
         [HttpPost("liveness/degrade")]
+        [HttpGet("liveness/degrade")]
         public IActionResult DegradeLiveness()
         {
             if (!IsStressEnabled())
