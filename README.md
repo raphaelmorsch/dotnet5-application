@@ -52,11 +52,125 @@ Funcionalidades da UI:
 | GET/POST | `/api/stress/readiness/degrade` | Simula falha na readiness (teste) |
 | DELETE | `/api/stress/readiness/degrade` | Restaura readiness após teste |
 
-## Teste da Liveness Probe
+## Guia de testes no OpenShift
 
-O endpoint `/health/live` pode ser degradado via API (requer `StressTest:Enabled=true`).
+Este guia cobre três tipos de teste operacional da aplicação no cluster. Todos os endpoints `/api/stress/*` exigem **`StressTest:Enabled=true`** — fora disso retornam `404`.
 
-**Liveness probe no Deployment:**
+### Pré-requisitos comuns
+
+Defina variáveis no terminal (ajuste se necessário):
+
+```bash
+export NS=mercantil-dev
+export DEPLOY=my-dotnet5-crud
+export HPA=$DEPLOY
+
+export ROUTE="http://$(oc get route -n $NS -l app.kubernetes.io/instance=dotnet5-application-dev -o jsonpath='{.items[0].spec.host}')"
+echo "ROUTE=$ROUTE"
+```
+
+Habilite os endpoints de teste:
+
+```bash
+oc set env deployment/$DEPLOY StressTest__Enabled=true -n $NS
+```
+
+Confirme que estão ativos:
+
+```bash
+curl -sk "$ROUTE/api/stress/status"
+# {"enabled":true,"memoryActive":false,"livenessDegraded":false,"readinessDegraded":false,...}
+```
+
+Para desabilitar após os testes:
+
+```bash
+oc set env deployment/$DEPLOY StressTest__Enabled- -n $NS
+```
+
+---
+
+### 1. StressTest (HPA — memória e carga de API)
+
+Use para validar **scale up/down** do HorizontalPodAutoscaler.
+
+#### Probes e HPA no Deployment (referência)
+
+O HPA escala com base em CPU e memória. Exemplo de targets:
+
+| Métrica | Target típico |
+|---------|---------------|
+| CPU | 60% do `request` |
+| Memória | 70% do `request` |
+
+Com `memory request: 128Mi`, **70% ≈ 90Mi** de uso médio dispara scale up.
+
+#### Opção A — script bash (recomendado, sem dotnet local)
+
+```bash
+chmod +x CrudApp/stress-example.sh
+
+# Padrão: 120MB por 600s
+./CrudApp/stress-example.sh
+
+# Teste rápido (1 minuto)
+MB=120 DURATION=60 ./CrudApp/stress-example.sh
+```
+
+#### Opção B — curl manual (stress de memória)
+
+```bash
+# Iniciar — aloca RAM real no pod (ideal para HPA)
+curl -sk -X POST "$ROUTE/api/stress/memory" \
+  -H "Content-Type: application/json" \
+  -d '{"megabytes":120,"durationSeconds":60}'
+
+# Status
+curl -sk "$ROUTE/api/stress/status"
+
+# Parar antes do timeout
+curl -sk -X DELETE "$ROUTE/api/stress/memory"
+```
+
+#### Opção C — subaplicação `CrudApp.StressTest` (CLI .NET)
+
+Requer SDK .NET instalado localmente:
+
+```bash
+# Stress de memória
+dotnet run --project CrudApp.StressTest -- \
+  -t "$ROUTE" -m memory --mb 120 -d 60
+
+# Stress de API (muitos POSTs paralelos — CPU/carga CRUD)
+dotnet run --project CrudApp.StressTest -- \
+  -t "$ROUTE" -m api -r 2000 -c 50
+
+# Memória + API em sequência
+dotnet run --project CrudApp.StressTest -- \
+  -t "$ROUTE" -m all --mb 120 -d 60 -r 2000 -c 50
+```
+
+#### Monitorar o HPA
+
+```bash
+watch -n 10 'echo "=== HPA ==="; oc get hpa $HPA -n $NS; echo; echo "=== PODS ==="; oc get pods -n $NS | grep $DEPLOY; echo; echo "=== MEMÓRIA ==="; oc adm top pods -n $NS | grep $DEPLOY'
+```
+
+**O que esperar:**
+
+| Fase | Sinal |
+|------|-------|
+| Scale up | `TARGETS` memória > 70%; `REPLICAS` sobe |
+| Scale down | Métricas caem; após ~5 min `REPLICAS` volta a 1 |
+| ArgoCD | Use `ignoreDifferences` em `/spec/replicas` para evitar conflito com HPA |
+
+---
+
+### 2. Simular falha de Liveness
+
+Use para provar que o **kubelet reinicia o pod** quando a aplicação deixa de responder como viva.
+
+#### Probe no Deployment
 
 ```yaml
 livenessProbe:
@@ -69,31 +183,49 @@ livenessProbe:
   failureThreshold: 3
 ```
 
-Com `failureThreshold: 3` e `periodSeconds: 10`, o kubelet reinicia o pod após **~30s** de falhas consecutivas.
+Com esses valores, **3 falhas × 10s ≈ 30s** até o restart.
 
-**Passos no OpenShift:**
+#### Passo a passo
 
 ```bash
-oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n mercantil-dev
+# 1. Confirmar saudável
+curl -sk "$ROUTE/health/live" -w "\nHTTP %{http_code}\n"
+# HTTP 200 — body: Healthy
 
-# Saudável
-curl -sk https://SUA-ROUTE/health/live          # HTTP 200
-
-# Degradar
-# Degradar (GET funciona sem body; POST requer -d '')
+# 2. Degradar a liveness
 curl -sk "$ROUTE/api/stress/liveness/degrade"
-# ou: curl -sk -X POST "$ROUTE/api/stress/liveness/degrade" -d ''
-curl -sk https://SUA-ROUTE/health/live          # HTTP 503
+# GET funciona sem body; POST requer: -d ''
 
-# Ver restart (~30-40s)
-watch -n 5 'oc get pods -n mercantil-dev | grep my-dotnet5-crud'
+# 3. Confirmar falha
+curl -sk "$ROUTE/health/live" -w "\nHTTP %{http_code}\n"
+# HTTP 503 — Unhealthy
+
+# 4. Monitorar restart do pod (~30-40s)
+watch -n 5 "oc get pods -n $NS | grep $DEPLOY"
 ```
 
-## Teste da Readiness Probe
+**O que esperar:**
 
-O endpoint `/health/ready` pode ser degradado via API (requer `StressTest:Enabled=true`).
+| Evento | Resultado |
+|--------|-----------|
+| `/health/live` degradado | HTTP **503** |
+| Após ~30s | Coluna `RESTARTS` incrementa; pod recriado |
+| Novo pod | Liveness saudável (estado em memória se perde) |
 
-**Readiness probe no Deployment:**
+#### Restaurar manualmente (opcional, antes do restart)
+
+```bash
+curl -sk -X DELETE "$ROUTE/api/stress/liveness/degrade"
+curl -sk "$ROUTE/health/live" -w "\nHTTP %{http_code}\n"   # 200
+```
+
+---
+
+### 3. Simular falha de Readiness
+
+Use para provar que o pod **sai do Service** (deixa de receber tráfego) **sem ser reiniciado**.
+
+#### Probe no Deployment
 
 ```yaml
 readinessProbe:
@@ -106,70 +238,56 @@ readinessProbe:
   failureThreshold: 3
 ```
 
-Diferente da liveness: falha na readiness **não reinicia** o pod — ele sai do Service (sem receber tráfego).
+Com esses valores, **3 falhas × 5s ≈ 15s** até ficar Not Ready.
 
-**Passos no OpenShift:**
+#### Passo a passo
 
 ```bash
-oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n mercantil-dev
+# 1. Confirmar saudável
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"
+# HTTP 200
 
-# Saudável
-curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"    # 200
-
-# Degradar
+# 2. Degradar a readiness
 curl -sk "$ROUTE/api/stress/readiness/degrade"
-curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"     # 503
 
-# Pod continua Running, mas Not Ready
-watch -n 5 'oc get pods -n mercantil-dev | grep my-dotnet5-crud'
+# 3. Confirmar falha
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"
+# HTTP 503
 
-# Restaurar (pod volta a receber tráfego)
+# 4. Pod continua Running, mas Not Ready (~15s)
+watch -n 5 "oc get pods -n $NS | grep $DEPLOY"
+# Exemplo: 0/1 Running  (ou 1/1 → 0/1 Ready)
+```
+
+**O que esperar:**
+
+| Evento | Resultado |
+|--------|-----------|
+| `/health/ready` degradado | HTTP **503** |
+| Pod | **Running**, porém **Not Ready** |
+| Tráfego | Route deixa de enviar requests ao pod |
+| `RESTARTS` | **Não** incrementa (diferente da liveness) |
+
+#### Restaurar
+
+```bash
 curl -sk -X DELETE "$ROUTE/api/stress/readiness/degrade"
-curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"     # 200
+curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"   # 200
+
+# Pod volta a Ready e recebe tráfego
+oc get pods -n $NS | grep $DEPLOY
+# 1/1 Running
 ```
 
-## CrudApp.StressTest (subaplicação)
+---
 
-Console app na solução que dispara carga contra a API principal.
+### Comparativo rápido
 
-**Modos:**
-
-| Modo | Descrição |
-|------|-----------|
-| `memory` | Chama `POST /api/stress/memory` (ideal para HPA) |
-| `api` | Cria produtos em paralelo via `POST /api/products` |
-| `all` | Executa os dois modos em sequência |
-
-**Local:**
-
-```bash
-# Terminal 1 — API
-cd CrudApp && dotnet run
-
-# Terminal 2 — stress de memória (480MB / 5 min)
-dotnet run --project CrudApp.StressTest -- -m memory --mb 480 -d 300
-
-# Stress de API (2000 POSTs, 50 concurrent)
-dotnet run --project CrudApp.StressTest -- -m api -r 2000 -c 50
-```
-
-**OpenShift** — habilite stress na app e aponte para a Route:
-
-```bash
-oc set env deployment/dotnet5-crud StressTest__Enabled=true -n dotnet-builders
-
-dotnet run --project CrudApp.StressTest -- \
-  -t https://SUA-ROUTE \
-  -m memory --mb 480 -d 300
-```
-
-Ou use o script:
-
-```bash
-ROUTE=https://SUA-ROUTE ./CrudApp/stress-example.sh
-```
-
-**Segurança:** endpoints `/api/stress/*` retornam `404` quando `StressTest:Enabled=false` (padrão em produção).
+| Teste | Endpoint degradado | Efeito no pod | Reinicia? |
+|-------|-------------------|---------------|-----------|
+| **StressTest (memória)** | — | HPA scale up/down | Não |
+| **Liveness** | `/health/live` → 503 | Kubelet mata e recria | **Sim** (~30s) |
+| **Readiness** | `/health/ready` → 503 | Remove do Service | **Não** |
 
 ## Health checks (OpenShift)
 
@@ -187,89 +305,19 @@ oc set probe deployment/crudapp -n dotnet-builders --readiness --get-url=http://
 
 No container S2I .NET, a aplicação escuta na porta **8080**.
 
-Namespace usado nos exemplos: **`dotnet-builders`**. Ajuste o nome do Deployment se for diferente (ex.: `dotnet-1`):
-
-```bash
-oc get deployment -n dotnet-builders
-```
-
-## HPA (autoscaling por memória)
+## HPA (autoscaling)
 
 Escala quando o uso médio de memória dos pods ultrapassa **65%** do `memory request` (128Mi em `openshift/deployment.yaml`).
 
 Aplicar:
 
 ```bash
-oc apply -f openshift/deployment.yaml -n dotnet-builders
-oc apply -f openshift/hpa.yaml -n dotnet-builders
+oc apply -f openshift/hpa.yaml -n mercantil-dev
+oc get hpa my-dotnet5-crud -n mercantil-dev
+oc adm top pods -n mercantil-dev
 ```
 
-Verificar:
-
-```bash
-oc get hpa -n dotnet-builders
-oc describe hpa crudapp -n dotnet-builders
-oc adm top pods -n dotnet-builders
-```
-
-## Teste de stress do HPA
-
-### 1. Confirmar métricas
-
-```bash
-NS=dotnet-builders
-
-oc get hpa -n "$NS"
-oc adm top pods -n "$NS"
-oc describe hpa crudapp -n "$NS"
-```
-
-O HPA deve exibir `TARGETS` com percentual (ex.: `45%/65%`). Se aparecer `<unknown>`, as métricas ainda não estão disponíveis.
-
-### 2. Monitorar em tempo real
-
-```bash
-watch -n 5 'echo "=== HPA ==="; oc get hpa -n dotnet-builders; echo; echo "=== PODS ==="; oc get pods -n dotnet-builders; echo; echo "=== MEMÓRIA ==="; oc adm top pods -n dotnet-builders'
-```
-
-O HPA sobe **+1 pod por minuto** após passar de 65% — aguarde **2–5 minutos** após a memória subir.
-
-### 3. Gerar carga com a subaplicação (recomendado)
-
-```bash
-# Memória — dispara HPA de forma previsível
-dotnet run --project CrudApp.StressTest -- \
-  -t https://SUA-ROUTE-AQUI \
-  -m memory --mb 480 -d 300
-
-# Ou via curl (com StressTest__Enabled=true no pod)
-curl -X POST https://SUA-ROUTE-AQUI/api/stress/memory \
-  -H "Content-Type: application/json" \
-  -d '{"megabytes":480,"durationSeconds":300}'
-```
-
-Alternativa — carga via CRUD (menos previsível para memória):
-
-```bash
-dotnet run --project CrudApp.StressTest -- -t https://SUA-ROUTE-AQUI -m api -r 3000 -c 50
-```
-
-### 4. Validar escala
-
-```bash
-oc adm top pods -n dotnet-builders
-oc get hpa -n dotnet-builders
-oc get pods -n dotnet-builders
-oc describe hpa crudapp -n dotnet-builders | tail -20
-```
-
-**65% de 128Mi ≈ 83Mi** — acima disso, o HPA deve aumentar as réplicas.
-
-### 5. Limpeza
-
-```bash
-oc delete pod -l app=crudapp -n dotnet-builders
-```
+Para testes de stress e scale, veja a seção **Guia de testes no OpenShift** acima.
 
 ## ArgoCD + HPA (OutOfSync em replicas)
 
