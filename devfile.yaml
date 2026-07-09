@@ -1,0 +1,48 @@
+schemaVersion: 2.3.0
+
+metadata:
+  name: agents-devspace
+  displayName: Agents Workspace
+  description: Workspace com Red Hat UDI RHEL9 e extensões para desenvolvimento com Agents.
+
+components:
+  - name: tools
+    container:
+      image: registry.redhat.io/devspaces/udi-rhel9:3.29-1782991491
+      memoryRequest: 2Gi
+      memoryLimit: 6Gi
+      cpuRequest: "1"
+      cpuLimit: "4"
+      mountSources: true
+      sourceMapping: /projects
+
+commands:
+  - id: install-agent-extensions
+    exec:
+      component: tools
+      workingDir: /projects
+      commandLine: |
+        mkdir -p /projects/extensions
+
+        curl -L -o /projects/extensions/continue.vsix \
+          https://open-vsx.org/api/Continue/continue/latest/file/Continue.continue-latest.vsix
+
+        curl -L -o /projects/extensions/cline.vsix \
+          https://open-vsx.org/api/saoudrizwan/claude-dev/latest/file/saoudrizwan.claude-dev-latest.vsix
+
+        curl -L -o /projects/extensions/yaml.vsix \
+          https://open-vsx.org/api/redhat/vscode-yaml/latest/file/redhat.vscode-yaml-latest.vsix
+
+        curl -L -o /projects/extensions/kubernetes-tools.vsix \
+          https://open-vsx.org/api/ms-kubernetes-tools/vscode-kubernetes-tools/latest/file/ms-kubernetes-tools.vscode-kubernetes-tools-latest.vsix
+
+        curl -L -o /projects/extensions/openshift-toolkit.vsix \
+          https://open-vsx.org/api/redhat/vscode-openshift-connector/latest/file/redhat.vscode-openshift-connector-latest.vsix
+
+events:
+  postStart:
+    - install-agent-extensions
+
+attributes:
+  controller.devfile.io/storage-type: per-user
+  che-theia.eclipse.org/sidecar-policy: mergeImage
