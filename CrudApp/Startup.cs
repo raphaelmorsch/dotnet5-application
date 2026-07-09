@@ -16,8 +16,10 @@ namespace CrudApp
             services.AddControllers();
             services.AddSingleton<IProductRepository, InMemoryProductRepository>();
             services.AddSingleton<MemoryStressService>();
+            services.AddSingleton<LivenessDegradeService>();
             services.AddHealthChecks()
-                .AddCheck("self", () => HealthCheckResult.Healthy(), new[] { "live", "ready" });
+                .AddCheck("self", () => HealthCheckResult.Healthy(), new[] { "ready" })
+                .AddCheck<LivenessHealthCheck>("liveness", tags: new[] { "live" });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

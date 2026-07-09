@@ -10,11 +10,16 @@ namespace CrudApp.Controllers
     public class StressController : ControllerBase
     {
         private readonly MemoryStressService _memoryStress;
+        private readonly LivenessDegradeService _livenessDegrade;
         private readonly IConfiguration _configuration;
 
-        public StressController(MemoryStressService memoryStress, IConfiguration configuration)
+        public StressController(
+            MemoryStressService memoryStress,
+            LivenessDegradeService livenessDegrade,
+            IConfiguration configuration)
         {
             _memoryStress = memoryStress;
+            _livenessDegrade = livenessDegrade;
             _configuration = configuration;
         }
 
@@ -30,7 +35,8 @@ namespace CrudApp.Controllers
             {
                 enabled = true,
                 memoryActive = _memoryStress.IsActive,
-                allocatedMegabytes = _memoryStress.AllocatedMegabytes
+                allocatedMegabytes = _memoryStress.AllocatedMegabytes,
+                livenessDegraded = _livenessDegrade.IsDegraded
             });
         }
 
@@ -74,6 +80,37 @@ namespace CrudApp.Controllers
             _memoryStress.Release();
 
             return Ok(new { message = "Memory stress released." });
+        }
+
+        [HttpPost("liveness/degrade")]
+        public IActionResult DegradeLiveness()
+        {
+            if (!IsStressEnabled())
+            {
+                return NotFound();
+            }
+
+            _livenessDegrade.Degrade();
+
+            return Accepted(new
+            {
+                message = "Liveness probe will fail until restored.",
+                healthEndpoint = "/health/live",
+                restore = "DELETE /api/stress/liveness/degrade"
+            });
+        }
+
+        [HttpDelete("liveness/degrade")]
+        public IActionResult RestoreLiveness()
+        {
+            if (!IsStressEnabled())
+            {
+                return NotFound();
+            }
+
+            _livenessDegrade.Restore();
+
+            return Ok(new { message = "Liveness probe restored." });
         }
 
         private bool IsStressEnabled()

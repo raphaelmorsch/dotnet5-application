@@ -47,6 +47,43 @@ Funcionalidades da UI:
 | GET | `/api/stress/status` | Status do stress (se habilitado) |
 | POST | `/api/stress/memory` | Aloca memória para teste de HPA |
 | DELETE | `/api/stress/memory` | Libera memória alocada |
+| POST | `/api/stress/liveness/degrade` | Simula falha na liveness (teste) |
+| DELETE | `/api/stress/liveness/degrade` | Restaura liveness após teste |
+
+## Teste da Liveness Probe
+
+O endpoint `/health/live` pode ser degradado via API (requer `StressTest:Enabled=true`).
+
+**Liveness probe no Deployment:**
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health/live
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+```
+
+Com `failureThreshold: 3` e `periodSeconds: 10`, o kubelet reinicia o pod após **~30s** de falhas consecutivas.
+
+**Passos no OpenShift:**
+
+```bash
+oc set env deployment/my-dotnet5-crud StressTest__Enabled=true -n mercantil-dev
+
+# Saudável
+curl -sk https://SUA-ROUTE/health/live          # HTTP 200
+
+# Degradar
+curl -sk -X POST https://SUA-ROUTE/api/stress/liveness/degrade
+curl -sk https://SUA-ROUTE/health/live          # HTTP 503
+
+# Ver restart (~30-40s)
+watch -n 5 'oc get pods -n mercantil-dev | grep my-dotnet5-crud'
+```
 
 ## CrudApp.StressTest (subaplicação)
 
@@ -189,6 +226,30 @@ oc describe hpa crudapp -n dotnet-builders | tail -20
 
 ```bash
 oc delete pod -l app=crudapp -n dotnet-builders
+```
+
+## ArgoCD + HPA (OutOfSync em replicas)
+
+O HPA altera `deployment.spec.replicas` no cluster; o Git permanece com `replicas: 1` → ArgoCD fica **OutOfSync**. Isso é normal sem `ignoreDifferences`.
+
+No **Application** do ArgoCD (repo GitOps):
+
+```yaml
+spec:
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+```
+
+Para **destravar scale down agora** (HPA sobrescreve `oc scale`):
+
+```bash
+oc delete hpa my-dotnet5-crud -n mercantil-dev
+oc scale deployment/my-dotnet5-crud --replicas=1 -n mercantil-dev
+oc get rs -n mercantil-dev | grep my-dotnet5-crud
+# Reaplicar HPA via ArgoCD sync
 ```
 
 ## Exemplos com curl
