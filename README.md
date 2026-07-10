@@ -47,6 +47,8 @@ Funcionalidades da UI:
 | GET | `/api/stress/status` | Status do stress (se habilitado) |
 | POST | `/api/stress/memory` | Aloca memória para teste de HPA |
 | DELETE | `/api/stress/memory` | Libera memória alocada |
+| POST | `/api/stress/cpu` | Consome CPU para teste de HPA |
+| DELETE | `/api/stress/cpu` | Para o stress de CPU |
 | GET/POST | `/api/stress/liveness/degrade` | Simula falha na liveness (teste) |
 | DELETE | `/api/stress/liveness/degrade` | Restaura liveness após teste |
 | GET/POST | `/api/stress/readiness/degrade` | Simula falha na readiness (teste) |
@@ -105,16 +107,24 @@ O HPA escala com base em CPU e memória. Exemplo de targets:
 
 Com `memory request: 128Mi`, **70% ≈ 90Mi** de uso médio dispara scale up.
 
+Com `cpu request: 100m`, **60% ≈ 60m** de uso médio dispara scale up.
+
 #### Opção A — script bash (recomendado, sem dotnet local)
 
 ```bash
 chmod +x CrudApp/stress-example.sh
 
-# Padrão: 120MB por 600s
+# Memória — padrão: 120MB por 600s
 ./CrudApp/stress-example.sh
 
-# Teste rápido (1 minuto)
+# Memória — teste rápido (1 minuto)
 MB=120 DURATION=60 ./CrudApp/stress-example.sh
+
+# CPU — 80% dos cores lógicos por 120s
+PERCENT=80 DURATION=120 ./CrudApp/stress-example.sh cpu
+
+# CPU — 2 threads fixas por 60s
+THREADS=2 DURATION=60 ./CrudApp/stress-example.sh cpu
 ```
 
 #### Opção B — curl manual (stress de memória)
@@ -132,6 +142,26 @@ curl -sk "$ROUTE/api/stress/status"
 curl -sk -X DELETE "$ROUTE/api/stress/memory"
 ```
 
+#### Opção B2 — curl manual (stress de CPU)
+
+```bash
+# Iniciar — consome CPU dentro do pod (ideal para HPA por CPU)
+curl -sk -X POST "$ROUTE/api/stress/cpu" \
+  -H "Content-Type: application/json" \
+  -d '{"percentCpu":80,"durationSeconds":120}'
+
+# Ou threads explícitas (ignora percentCpu para contagem)
+curl -sk -X POST "$ROUTE/api/stress/cpu" \
+  -H "Content-Type: application/json" \
+  -d '{"percentCpu":80,"threads":2,"durationSeconds":120}'
+
+# Status
+curl -sk "$ROUTE/api/stress/status"
+
+# Parar antes do timeout
+curl -sk -X DELETE "$ROUTE/api/stress/cpu"
+```
+
 #### Opção C — subaplicação `CrudApp.StressTest` (CLI .NET)
 
 Requer SDK .NET instalado localmente:
@@ -141,7 +171,11 @@ Requer SDK .NET instalado localmente:
 dotnet run --project CrudApp.StressTest -- \
   -t "$ROUTE" -m memory --mb 120 -d 60
 
-# Stress de API (muitos POSTs paralelos — CPU/carga CRUD)
+# Stress de CPU (dentro do pod)
+dotnet run --project CrudApp.StressTest -- \
+  -t "$ROUTE" -m cpu --percent-cpu 80 -d 120
+
+# Stress de API (muitos POSTs paralelos — carga CRUD indireta)
 dotnet run --project CrudApp.StressTest -- \
   -t "$ROUTE" -m api -r 2000 -c 50
 
@@ -153,7 +187,7 @@ dotnet run --project CrudApp.StressTest -- \
 #### Monitorar o HPA
 
 ```bash
-watch -n 10 'echo "=== HPA ==="; oc get hpa $HPA -n $NS; echo; echo "=== PODS ==="; oc get pods -n $NS | grep $DEPLOY; echo; echo "=== MEMÓRIA ==="; oc adm top pods -n $NS | grep $DEPLOY'
+watch -n 10 'echo "=== HPA ==="; oc get hpa $HPA -n $NS; echo; echo "=== PODS ==="; oc get pods -n $NS | grep $DEPLOY; echo; echo "=== RECURSOS ==="; oc adm top pods -n $NS | grep $DEPLOY'
 ```
 
 **O que esperar:**
@@ -214,6 +248,8 @@ watch -n 5 "oc get pods -n $NS | grep $DEPLOY"
 
 #### Restaurar manualmente (opcional, antes do restart)
 
+Com vários pods, repita o `DELETE` ou use `./CrudApp/stress-example.sh restore-liveness`.
+
 ```bash
 curl -sk -X DELETE "$ROUTE/api/stress/liveness/degrade"
 curl -sk "$ROUTE/health/live" -w "\nHTTP %{http_code}\n"   # 200
@@ -265,13 +301,53 @@ watch -n 5 "oc get pods -n $NS | grep $DEPLOY"
 |--------|-----------|
 | `/health/ready` degradado | HTTP **503** |
 | Pod | **Running**, porém **Not Ready** |
-| Tráfego | Route deixa de enviar requests ao pod |
+| Tráfego | **Service/Route param de enviar** requests ao pod (só pods Ready no Endpoints) |
 | `RESTARTS` | **Não** incrementa (diferente da liveness) |
+
+#### Provar remoção do balanceamento (2 pods)
+
+Degrade **um pod específico** via `oc exec` (não via Route — senão você não controla qual pod recebe o degrade):
+
+```bash
+# Helper automatizado (30 requests + Endpoints)
+./CrudApp/stress-example.sh verify-readiness-drain
+
+# Manual
+POD=$(oc get pods -n $NS -l app=$DEPLOY -o jsonpath='{.items[0].metadata.name}')
+oc exec -n $NS $POD -- curl -s localhost:8080/api/stress/readiness/degrade
+
+# Endpoints: IP do pod Not Ready some da lista
+oc get endpoints my-dotnet5-crud -n $NS -o wide
+
+# Route só balanceia entre pods Ready
+for i in $(seq 1 20); do curl -sk "$ROUTE/api/stress/status" | grep -o '"pod":"[^"]*"'; done
+# → só aparece o nome do pod saudável
+```
 
 #### Restaurar
 
+O estado de degrade é **por pod** (memória local). A Route distribui requests — um único `DELETE` restaura **apenas o pod que atendeu** aquela requisição.
+
 ```bash
+# Ver qual pod respondeu (campo "pod" no JSON)
 curl -sk -X DELETE "$ROUTE/api/stress/readiness/degrade"
+
+# Com 2+ pods: repita até todos estarem Ready
+for i in $(seq 1 10); do
+  curl -sk -X DELETE "$ROUTE/api/stress/readiness/degrade"
+  sleep 0.5
+done
+
+# Ou use o helper do script (lê réplicas do Deployment)
+./CrudApp/stress-example.sh restore-readiness
+
+# Conferir status por pod (cada chamada pode cair em pod diferente)
+curl -sk "$ROUTE/api/stress/status"
+
+# Alternativa: degradar todos de uma vez via env (rollout recria pods com a flag)
+oc set env deployment/my-dotnet5-crud StressTest__ReadinessDegraded=true -n $NS
+oc set env deployment/my-dotnet5-crud StressTest__ReadinessDegraded- -n $NS
+
 curl -sk "$ROUTE/health/ready" -w "\nHTTP %{http_code}\n"   # 200
 
 # Pod volta a Ready e recebe tráfego

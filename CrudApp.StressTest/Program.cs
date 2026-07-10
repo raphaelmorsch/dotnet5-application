@@ -15,6 +15,8 @@ namespace CrudApp.StressTest
         public string Mode { get; set; } = "help";
         public int Megabytes { get; set; } = 480;
         public int DurationSeconds { get; set; } = 300;
+        public int PercentCpu { get; set; } = 80;
+        public int? Threads { get; set; }
         public int Requests { get; set; } = 2000;
         public int Concurrency { get; set; } = 50;
         public int PayloadSize { get; set; } = 5000;
@@ -47,6 +49,7 @@ namespace CrudApp.StressTest
             return options.Mode switch
             {
                 "memory" => await RunMemoryStressAsync(http, baseUrl, options),
+                "cpu" => await RunCpuStressAsync(http, baseUrl, options),
                 "api" => await RunApiStressAsync(http, baseUrl, options),
                 "all" => await RunAllStressAsync(http, baseUrl, options),
                 _ => PrintUnknownMode(options.Mode)
@@ -99,6 +102,45 @@ namespace CrudApp.StressTest
             Console.WriteLine();
             Console.WriteLine("Parar antes do timeout:");
             Console.WriteLine($"  curl -X DELETE {baseUrl}/api/stress/memory");
+
+            return 0;
+        }
+
+        private static async Task<int> RunCpuStressAsync(HttpClient http, string baseUrl, StressOptions options)
+        {
+            object payload = options.Threads.HasValue
+                ? new { percentCpu = options.PercentCpu, threads = options.Threads.Value, durationSeconds = options.DurationSeconds }
+                : new { percentCpu = options.PercentCpu, durationSeconds = options.DurationSeconds };
+
+            var json = JsonSerializer.Serialize(payload, JsonOptions);
+            var threadInfo = options.Threads.HasValue
+                ? $"{options.Threads.Value} threads"
+                : $"{options.PercentCpu}% CPU";
+
+            Console.WriteLine($"Iniciando stress de CPU ({threadInfo}) por {options.DurationSeconds}s via POST /api/stress/cpu ...");
+
+            var response = await http.PostAsync(
+                $"{baseUrl}/api/stress/cpu",
+                new StringContent(json, Encoding.UTF8, "application/json"));
+
+            var body = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"Status: {(int)response.StatusCode} {response.ReasonPhrase}");
+            Console.WriteLine(body);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Dica: habilite StressTest:Enabled=true na aplicação alvo (Development ou env StressTest__Enabled=true).");
+                return 1;
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Monitorar HPA:");
+            Console.WriteLine("  oc get hpa -n dotnet-builders");
+            Console.WriteLine("  oc adm top pods -n dotnet-builders");
+            Console.WriteLine();
+            Console.WriteLine("Parar antes do timeout:");
+            Console.WriteLine($"  curl -X DELETE {baseUrl}/api/stress/cpu");
 
             return 0;
         }
@@ -213,6 +255,15 @@ namespace CrudApp.StressTest
                         options.DurationSeconds = int.Parse(next ?? "300");
                         i++;
                         break;
+                    case "--percent-cpu":
+                    case "--percent":
+                        options.PercentCpu = int.Parse(next ?? "80");
+                        i++;
+                        break;
+                    case "--threads":
+                        options.Threads = int.Parse(next ?? "1");
+                        i++;
+                        break;
                     case "--requests":
                     case "-r":
                         options.Requests = int.Parse(next ?? "2000");
@@ -246,15 +297,18 @@ namespace CrudApp.StressTest
             Console.WriteLine();
             Console.WriteLine("Opções:");
             Console.WriteLine("  -t, --target URL        URL base (default: http://localhost:5000)");
-            Console.WriteLine("  -m, --mode MODE         memory | api | all | help");
+            Console.WriteLine("  -m, --mode MODE         memory | cpu | api | all | help");
             Console.WriteLine("      --mb MEGABYTES      Memória para stress (default: 480)");
-            Console.WriteLine("  -d, --duration SEC      Duração do stress de memória (default: 300)");
+            Console.WriteLine("  -d, --duration SEC      Duração do stress (default: 300)");
+            Console.WriteLine("      --percent-cpu PCT   CPU no modo cpu (default: 80)");
+            Console.WriteLine("      --threads N         Threads explícitas no modo cpu (opcional)");
             Console.WriteLine("  -r, --requests N        Requisições POST no modo api (default: 2000)");
             Console.WriteLine("  -c, --concurrency N     Concorrência no modo api (default: 50)");
             Console.WriteLine("      --payload SIZE      Tamanho do nome do produto em chars (default: 5000)");
             Console.WriteLine();
             Console.WriteLine("Exemplos:");
             Console.WriteLine("  dotnet run --project CrudApp.StressTest -- -m memory --mb 480 -d 300");
+            Console.WriteLine("  dotnet run --project CrudApp.StressTest -- -m cpu --percent-cpu 80 -d 120");
             Console.WriteLine("  dotnet run --project CrudApp.StressTest -- -m api -r 5000 -c 100");
             Console.WriteLine("  dotnet run --project CrudApp.StressTest -- -t https://sua-route -m all");
         }

@@ -1,11 +1,26 @@
+using Microsoft.Extensions.Configuration;
+
 namespace CrudApp.Services
 {
     public class ReadinessDegradeService
     {
-        public bool IsDegraded { get; private set; }
+        private bool _localDegraded;
+        private readonly IConfiguration _configuration;
 
-        public void Degrade() => IsDegraded = true;
+        public ReadinessDegradeService(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
 
-        public void Restore() => IsDegraded = false;
+        public bool IsDegraded =>
+            _localDegraded || _configuration.GetValue<bool>("StressTest:ReadinessDegraded");
+
+        public bool IsLocallyDegraded => _localDegraded;
+
+        public bool IsGloballyDegraded => _configuration.GetValue<bool>("StressTest:ReadinessDegraded");
+
+        public void Degrade() => _localDegraded = true;
+
+        public void Restore() => _localDegraded = false;
     }
 }

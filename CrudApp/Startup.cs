@@ -16,6 +16,7 @@ namespace CrudApp
             services.AddControllers();
             services.AddSingleton<IProductRepository, InMemoryProductRepository>();
             services.AddSingleton<MemoryStressService>();
+            services.AddSingleton<CpuStressService>();
             services.AddSingleton<LivenessDegradeService>();
             services.AddSingleton<ReadinessDegradeService>();
             services.AddHealthChecks()
