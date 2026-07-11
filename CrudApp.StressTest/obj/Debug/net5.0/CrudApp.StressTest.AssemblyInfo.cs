@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CrudApp.StressTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5f995a02171626999d92aee12be1ba1e8ea6159f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+339a33b8995e5a4cc548e992b8363e2d9bfa0f12")]
 [assembly: System.Reflection.AssemblyProductAttribute("CrudApp.StressTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CrudApp.StressTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

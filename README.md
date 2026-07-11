@@ -56,7 +56,16 @@ Funcionalidades da UI:
 
 ## Guia de testes no OpenShift
 
-Este guia cobre três tipos de teste operacional da aplicação no cluster. Todos os endpoints `/api/stress/*` exigem **`StressTest:Enabled=true`** — fora disso retornam `404`.
+Este guia cobre quatro tipos de teste operacional da aplicação no cluster:
+
+| # | Tipo | Objetivo | Escopo |
+|---|------|----------|--------|
+| 1 | **Stress in-pod** (memória / CPU) | Disparar HPA por métrica específica | **Um pod** por request (Route load balance) |
+| 2 | **Carga de requests** (CRUD / Ddosify) | Simular tráfego real em toda a aplicação | **Todos os pods** via Route |
+| 3 | **Liveness** | Provar restart automático pelo kubelet | Por pod |
+| 4 | **Readiness** | Provar remoção do balanceamento sem restart | Por pod |
+
+Todos os endpoints `/api/stress/*` exigem **`StressTest:Enabled=true`** — fora disso retornam `404`. Os endpoints `/api/products` **não** exigem essa flag.
 
 ### Pré-requisitos comuns
 
@@ -67,7 +76,7 @@ export NS=mercantil-dev
 export DEPLOY=my-dotnet5-crud
 export HPA=$DEPLOY
 
-export ROUTE="http://$(oc get route -n $NS -l app.kubernetes.io/instance=dotnet5-application-dev -o jsonpath='{.items[0].spec.host}')"
+export ROUTE="https://$(oc get route -n $NS -l app.kubernetes.io/instance=dotnet5-application-dev -o jsonpath='{.items[0].spec.host}')"
 echo "ROUTE=$ROUTE"
 ```
 
@@ -81,7 +90,7 @@ Confirme que estão ativos:
 
 ```bash
 curl -sk "$ROUTE/api/stress/status"
-# {"enabled":true,"memoryActive":false,"livenessDegraded":false,"readinessDegraded":false,...}
+# {"enabled":true,"pod":"...","memoryActive":false,"cpuActive":false,"cpuPercent":0,...}
 ```
 
 Para desabilitar após os testes:
@@ -92,9 +101,11 @@ oc set env deployment/$DEPLOY StressTest__Enabled- -n $NS
 
 ---
 
-### 1. StressTest (HPA — memória e carga de API)
+### 1. Stress in-pod (HPA — memória e CPU)
 
-Use para validar **scale up/down** do HorizontalPodAutoscaler.
+Use para validar **scale up/down** do HorizontalPodAutoscaler com consumo controlado **dentro de um pod**.
+
+> **Importante:** `POST /api/stress/memory` e `POST /api/stress/cpu` afetam **apenas o pod que atende a requisição**. Para stressar um pod específico, use `oc exec` (veja exemplos abaixo). Para carga em **todos os pods**, use a seção [2. Carga de requests](#2-carga-de-requests-crud--ddosify).
 
 #### Probes e HPA no Deployment (referência)
 
@@ -127,10 +138,20 @@ PERCENT=80 DURATION=120 ./CrudApp/stress-example.sh cpu
 THREADS=2 DURATION=60 ./CrudApp/stress-example.sh cpu
 ```
 
+Outros subcomandos do script:
+
+| Subcomando | Descrição |
+|------------|-----------|
+| `./CrudApp/stress-example.sh` | Stress de memória (padrão) |
+| `./CrudApp/stress-example.sh cpu` | Stress de CPU |
+| `./CrudApp/stress-example.sh restore-readiness` | Restaura readiness em todos os pods |
+| `./CrudApp/stress-example.sh restore-liveness` | Restaura liveness em todos os pods |
+| `./CrudApp/stress-example.sh verify-readiness-drain` | Prova remoção do balanceamento (2+ pods) |
+
 #### Opção B — curl manual (stress de memória)
 
 ```bash
-# Iniciar — aloca RAM real no pod (ideal para HPA)
+# Iniciar — aloca RAM real no pod (ideal para HPA por memória)
 curl -sk -X POST "$ROUTE/api/stress/memory" \
   -H "Content-Type: application/json" \
   -d '{"megabytes":120,"durationSeconds":60}'
@@ -150,7 +171,7 @@ curl -sk -X POST "$ROUTE/api/stress/cpu" \
   -H "Content-Type: application/json" \
   -d '{"percentCpu":80,"durationSeconds":120}'
 
-# Ou threads explícitas (ignora percentCpu para contagem)
+# Ou threads explícitas (sobrescreve o cálculo por percentCpu)
 curl -sk -X POST "$ROUTE/api/stress/cpu" \
   -H "Content-Type: application/json" \
   -d '{"percentCpu":80,"threads":2,"durationSeconds":120}'
@@ -160,6 +181,22 @@ curl -sk "$ROUTE/api/stress/status"
 
 # Parar antes do timeout
 curl -sk -X DELETE "$ROUTE/api/stress/cpu"
+```
+
+| Parâmetro | Valores | Descrição |
+|-----------|---------|-----------|
+| `percentCpu` | 1–100 | % dos cores lógicos do pod |
+| `threads` | 1–64 (opcional) | Threads busy-loop explícitas |
+| `durationSeconds` | 1–3600 | Para automaticamente após o tempo |
+
+Stress em **pod específico** (sem depender do load balance da Route):
+
+```bash
+POD=$(oc get pods -n $NS -l app=$DEPLOY -o jsonpath='{.items[0].metadata.name}')
+
+oc exec -n $NS "$POD" -- curl -s -X POST localhost:8080/api/stress/cpu \
+  -H "Content-Type: application/json" \
+  -d '{"percentCpu":80,"durationSeconds":120}'
 ```
 
 #### Opção C — subaplicação `CrudApp.StressTest` (CLI .NET)
@@ -194,13 +231,93 @@ watch -n 10 'echo "=== HPA ==="; oc get hpa $HPA -n $NS; echo; echo "=== PODS ==
 
 | Fase | Sinal |
 |------|-------|
-| Scale up | `TARGETS` memória > 70%; `REPLICAS` sobe |
+| Scale up (memória) | `TARGETS` memória > 70%; `REPLICAS` sobe |
+| Scale up (CPU) | `TARGETS` CPU > 60%; `REPLICAS` sobe |
 | Scale down | Métricas caem; após ~5 min `REPLICAS` volta a 1 |
 | ArgoCD | Use `ignoreDifferences` em `/spec/replicas` para evitar conflito com HPA |
 
 ---
 
-### 2. Simular falha de Liveness
+### 2. Carga de requests (CRUD / Ddosify)
+
+Use para simular **tráfego HTTP real** distribuído pela **Route** entre **todos os pods Ready**. Não exige `StressTest:Enabled`.
+
+Ideal para validar comportamento da aplicação sob carga (latência, throughput, scale por CPU/memória induzida pelo tráfego).
+
+#### curl — cadastrar produto
+
+```bash
+curl -sk -X POST "$ROUTE/api/products" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Produto Load Test","price":19.99,"quantity":10}'
+# HTTP 201 Created → {"id":1,"name":"Produto Load Test","price":19.99,"quantity":10}
+```
+
+#### Outros endpoints úteis para carga
+
+```bash
+# Listar (GET — não cresce memória)
+curl -sk "$ROUTE/api/products"
+
+# Buscar por ID
+curl -sk "$ROUTE/api/products/1"
+
+# Atualizar
+curl -sk -X PUT "$ROUTE/api/products/1" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Produto Atualizado","price":29.99,"quantity":5}'
+
+# Remover
+curl -sk -X DELETE "$ROUTE/api/products/1"
+```
+
+#### Configuração no Ddosify (exemplo)
+
+| Campo | Valor |
+|-------|-------|
+| **Method** | `POST` |
+| **URL** | `https://SUA-ROUTE.apps.cluster.com/api/products` |
+| **Header** | `Content-Type: application/json` |
+| **Body** | `{"name":"Produto Load Test","price":19.99,"quantity":10}` |
+| **Target RPS** | `200` (ajuste conforme necessário) |
+
+Se o Ddosify suportar variáveis dinâmicas no body:
+
+```json
+{"name":"load-{{random}}","price":19.99,"quantity":1}
+```
+
+#### Mix recomendado (carga realista)
+
+| Cenário | % | Método | URL |
+|---------|---|--------|-----|
+| Criar produto | 30% | POST | `/api/products` |
+| Listar produtos | 50% | GET | `/api/products` |
+| Buscar por ID | 20% | GET | `/api/products/1` |
+
+#### Validar distribuição entre pods
+
+Com `StressTest:Enabled=true`, confira quais pods respondem:
+
+```bash
+for i in $(seq 1 50); do
+  curl -sk "$ROUTE/api/stress/status" | grep -o '"pod":"[^"]*"'
+done | sort | uniq -c
+```
+
+Monitore recursos de todos os pods durante o teste:
+
+```bash
+watch -n 2 'oc get pods -n $NS -l app=$DEPLOY; echo; oc adm top pods -n $NS | grep $DEPLOY'
+```
+
+#### Atenção: POST contínuo enche memória
+
+Cada `POST /api/products` persiste um produto **em memória** (repositório in-memory). A **200 req/s** de criação gera ~12.000 produtos/minuto — isso pode disparar scale por **memória** além de CPU. Para testes longos, prefira mix com GET ou carga só de leitura.
+
+---
+
+### 3. Simular falha de Liveness
 
 Use para provar que o **kubelet reinicia o pod** quando a aplicação deixa de responder como viva.
 
@@ -257,7 +374,7 @@ curl -sk "$ROUTE/health/live" -w "\nHTTP %{http_code}\n"   # 200
 
 ---
 
-### 3. Simular falha de Readiness
+### 4. Simular falha de Readiness
 
 Use para provar que o pod **sai do Service** (deixa de receber tráfego) **sem ser reiniciado**.
 
@@ -359,11 +476,13 @@ oc get pods -n $NS | grep $DEPLOY
 
 ### Comparativo rápido
 
-| Teste | Endpoint degradado | Efeito no pod | Reinicia? |
-|-------|-------------------|---------------|-----------|
-| **StressTest (memória)** | — | HPA scale up/down | Não |
-| **Liveness** | `/health/live` → 503 | Kubelet mata e recria | **Sim** (~30s) |
-| **Readiness** | `/health/ready` → 503 | Remove do Service | **Não** |
+| Teste | Como disparar | Escopo | Efeito | Reinicia pod? |
+|-------|---------------|--------|--------|---------------|
+| **Stress memória** | `POST /api/stress/memory` | 1 pod/request | HPA scale up/down | Não |
+| **Stress CPU** | `POST /api/stress/cpu` | 1 pod/request | HPA scale up/down | Não |
+| **Carga CRUD / Ddosify** | `POST/GET /api/products` | Todos os pods (Route) | CPU + memória por tráfego real | Não |
+| **Liveness** | `/health/live` → 503 | 1 pod/request | Kubelet mata e recria | **Sim** (~30s) |
+| **Readiness** | `/health/ready` → 503 | 1 pod/request | Remove do Service/Route | **Não** |
 
 ## Health checks (OpenShift)
 
@@ -383,7 +502,7 @@ No container S2I .NET, a aplicação escuta na porta **8080**.
 
 ## HPA (autoscaling)
 
-Escala quando o uso médio de memória dos pods ultrapassa **65%** do `memory request` (128Mi em `openshift/deployment.yaml`).
+Escala quando o uso médio de **CPU** ou **memória** dos pods ultrapassa os targets configurados (ex.: CPU 60%, memória 70% do `request`).
 
 Aplicar:
 
@@ -421,6 +540,8 @@ oc get rs -n mercantil-dev | grep my-dotnet5-crud
 
 ## Exemplos com curl
 
+### Local
+
 ```bash
 # Criar
 curl -X POST http://localhost:5000/api/products \
@@ -440,6 +561,18 @@ curl -X PUT http://localhost:5000/api/products/1 \
 
 # Remover
 curl -X DELETE http://localhost:5000/api/products/1
+```
+
+### OpenShift (via Route)
+
+```bash
+export ROUTE="https://$(oc get route -n mercantil-dev -l app.kubernetes.io/instance=dotnet5-application-dev -o jsonpath='{.items[0].spec.host}')"
+
+curl -sk -X POST "$ROUTE/api/products" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Notebook","price":3500.00,"quantity":10}'
+
+curl -sk "$ROUTE/api/products"
 ```
 
 Os dados são armazenados em memória e são perdidos ao reiniciar a aplicação.
